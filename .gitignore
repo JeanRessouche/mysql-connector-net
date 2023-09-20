@@ -1,0 +1,9 @@
+﻿MySQL.Data/.vs
+MySQL.Data/src/bin
+MySQL.Data/src/obj
+MySQL.Data/tests/MySql.Data.Tests/bin
+MySQL.Data/tests/MySql.Data.Tests/obj
+MySQL.Data/tests/MySqlX.Data.Performance.Console.Tests/bin
+MySQL.Data/tests/MySqlX.Data.Performance.Console.Tests/obj
+MySQL.Data/tests/MySqlX.Data.Tests/bin
+MySQL.Data/tests/MySqlX.Data.Tests/obj
