@@ -1,3 +1,9 @@
+# Fork
+
+This fork aim to provide a 8.1 version that actually works with MariaDb 10.10+.
+
+Issue assigned: https://stackoverflow.com/questions/74060289/mysqlconnection-open-system-invalidcastexception-object-cannot-be-cast-from-d
+
 # MySQL Connector/NET
 
 [![Languages](https://img.shields.io/github/languages/top/mysql/mysql-connector-net)](https://github.com/mysql/mysql-connector-net) [![License: GNU General Public License (GPLv2)](https://img.shields.io/badge/license-GPLv2_with_FOSS_exception-c30014.svg?style=flat)](LICENSE) [![NuGet](https://img.shields.io/nuget/v/MySql.Data)](https://www.nuget.org/profiles/MySQL)
