@@ -9,7 +9,7 @@
     <Authors>Oracle</Authors>
     <AssemblyName>MySql.Data</AssemblyName>
     <TargetFrameworks>net462;net48;netstandard2.0;netstandard2.1;net6.0;net7.0;net8.0;</TargetFrameworks>
-    <PackageId>MySql.Data</PackageId>
+    <PackageId>MediReport.MySql.Data</PackageId>
     <PackageTags>MySql;.NET Connector;MySql Connector/NET;netcore;.Net Core;MySql Conector/Net Core;coreclr;C/NET;C/Net Core</PackageTags>
     <PackageReleaseNotes>Review ReleaseNotes.txt for details.</PackageReleaseNotes>
     <PackageIcon>logo-mysql-170x115.png</PackageIcon>
@@ -35,6 +35,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Title>A fork of MySql.Data comatible with MariaDb 10.10 and +</Title>
     <RepositoryUrl>https://github.com/JeanRessouche/mysql-connector-net</RepositoryUrl>
+    <UserSecretsId>3ae9907b-c038-4596-afa3-73ba79d9813c</UserSecretsId>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>

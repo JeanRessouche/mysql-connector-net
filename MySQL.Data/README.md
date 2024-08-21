@@ -1,6 +1,6 @@
 # Fork
 
-This fork aim to provide a 8.1 version that actually works with MariaDb 10.10+.
+This fork aim to provide a 8.4 version that actually works with MariaDb 10.10+.
 
 Issue assigned: https://stackoverflow.com/questions/74060289/mysqlconnection-open-system-invalidcastexception-object-cannot-be-cast-from-d
 
