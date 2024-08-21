@@ -1,16 +1,16 @@
-// Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+// Copyright © 2014, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -160,34 +160,52 @@ namespace MySql.Data.Common
 
     private void GetConnectNumber(uint timeOut)
     {
-      EventWaitHandle connectRequest;
+      Mutex connectNamedMutex = null;
       try
       {
-        connectRequest =
-            EventWaitHandle.OpenExisting(memoryName + "_CONNECT_REQUEST");
-
+        connectNamedMutex = Mutex.OpenExisting(memoryName + "_CONNECT_NAMED_MUTEX");
       }
-      catch (Exception)
+      catch
       {
-        // If server runs as service, its shared memory is global 
-        // And if connector runs in user session, it needs to prefix
-        // shared memory name with "Global\"
-        string prefixedMemoryName = @"Global\" + memoryName;
-        connectRequest =
-            EventWaitHandle.OpenExisting(prefixedMemoryName + "_CONNECT_REQUEST");
-        memoryName = prefixedMemoryName;
+        throw new MySqlException("Failed to open shared memory connection mutex");
       }
-      EventWaitHandle connectAnswer =
-         EventWaitHandle.OpenExisting(memoryName + "_CONNECT_ANSWER");
-      using (SharedMemory connectData =
-          new SharedMemory(memoryName + "_CONNECT_DATA", (IntPtr)4))
+      if (!connectNamedMutex.WaitOne(checked((int)timeOut) * 1000, false))
+        throw new MySqlException("Mutex timeout during connection");
+      try
       {
-        // now start the connection
-        if (!connectRequest.Set())
-          throw new MySqlException("Failed to open shared memory connection");
-        if (!connectAnswer.WaitOne((int)(timeOut * 1000), false))
-          throw new MySqlException("Timeout during connection");
-        connectNumber = Marshal.ReadInt32(connectData.View);
+        EventWaitHandle connectRequest;
+        try
+        {
+          connectRequest =
+          EventWaitHandle.OpenExisting(memoryName + "_CONNECT_REQUEST");
+        }
+        catch (Exception)
+        {
+          // If server runs as service, its shared memory is global
+          // And if connector runs in user session, it needs to prefix
+          // shared memory name with "Global\"
+          string prefixedMemoryName = @"Global\" + memoryName;
+          connectRequest =
+          EventWaitHandle.OpenExisting(prefixedMemoryName + "_CONNECT_REQUEST");
+          memoryName = prefixedMemoryName;
+        }
+        EventWaitHandle connectAnswer =
+        EventWaitHandle.OpenExisting(memoryName + "_CONNECT_ANSWER");
+        using (SharedMemory connectData =
+        new SharedMemory(memoryName + "_CONNECT_DATA", (IntPtr)4))
+        {
+          // now start the connection
+          if (!connectRequest.Set())
+            throw new MySqlException("Failed to open shared memory connection");
+          if (!connectAnswer.WaitOne((int)(timeOut * 1000), false))
+            throw new MySqlException("Timeout during connection");
+          connectNumber = Marshal.ReadInt32(connectData.View);
+        }
+      }
+      finally
+      {
+        connectNamedMutex.ReleaseMutex();
+        connectNamedMutex.Dispose();
       }
     }
 

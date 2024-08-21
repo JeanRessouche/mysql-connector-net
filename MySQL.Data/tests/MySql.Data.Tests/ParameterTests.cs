@@ -1,16 +1,16 @@
-﻿// Copyright (c) 2013, 2022, Oracle and/or its affiliates.
+// Copyright © 2013, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -31,6 +31,7 @@ using System;
 using System.Data;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 
 namespace MySql.Data.MySqlClient.Tests
 {
@@ -234,9 +235,9 @@ namespace MySql.Data.MySqlClient.Tests
         using (MySqlDataReader reader = cmd.ExecuteReader())
         {
           reader.Read();
-          Assert.AreEqual("abcd", reader.GetString(0));
-          Assert.AreEqual("efgh", reader.GetString(1));
-          Assert.AreEqual("5678", reader.GetString(2));
+          Assert.AreEqual("abcd", Convert.ToString(reader[0]));
+          Assert.AreEqual("efgh", Encoding.Default.GetString((byte[])reader[1]));
+          Assert.AreEqual("5678", Convert.ToString(reader[2]));
         }
       }
     }

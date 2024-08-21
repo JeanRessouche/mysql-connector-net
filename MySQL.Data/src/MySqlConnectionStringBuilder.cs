@@ -1,16 +1,16 @@
-﻿// Copyright (c) 2013, 2023, Oracle and/or its affiliates.
+// Copyright © 2013, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -241,6 +241,9 @@ namespace MySql.Data.MySqlClient
         (msb, sender, value) => { msb.SetValue("blobasutf8excludepattern", value); }, (msb, sender) => msb.BlobAsUTF8ExcludePattern));
 
       #endregion
+
+      Options.Add(new MySqlConnectionStringOption("oldgetstringbehavior", null, typeof(bool), false, true,
+        (msb, sender, value) => { msb.SetValue("oldgetstringbehavior", value); }, (msb, sender) => msb.OldGetStringBehavior));
     }
 
     /// <summary>
@@ -850,9 +853,9 @@ namespace MySql.Data.MySqlClient
     }
 
     /// <summary>
-    /// Gets or sets the event for the callback.
+    /// Gets or sets the event for the WebauthN callback.
     /// </summary>
-    internal FidoActionCallback FidoActionRequested { get; set; }
+    internal WebAuthnActionCallback WebAuthnActionRequested { get; set; }
 
     #endregion
 
@@ -1008,6 +1011,17 @@ namespace MySql.Data.MySqlClient
       set { SetValue("usedefaultcommandtimeoutforef", value); }
     }
     #endregion
+
+    [DisplayName("Use the old GetString behavior for readers")]
+    [Category("Backwards Compatibility")]
+    [Description("When true, MySqlDataReader.GetString will return a string version of every possible data type")]
+    [DefaultValue(false)]
+    [Obsolete("This property is only used to provide old behavior.  This option and the old behavior will be removed in 9.0")]
+    public bool OldGetStringBehavior
+    {
+      get { return (bool)values["oldgetstringbehavior"]; }
+      set { SetValue("oldgetstringbehavior", value); }
+    }
 
     /// <summary>
     /// Gets or sets a connection option.

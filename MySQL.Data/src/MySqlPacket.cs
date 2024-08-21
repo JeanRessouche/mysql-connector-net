@@ -1,16 +1,16 @@
-// Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+// Copyright © 2004, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -135,6 +135,16 @@ namespace MySql.Data.MySqlClient
     public void WriteByte(byte b)
     {
       _buffer.WriteByte(b);
+    }
+
+    public void Write(byte[] bytes)
+    {
+      _buffer.Write(bytes, 0, bytes.Length);
+    }
+
+    public void Write(byte[] bytes, int offset, int countToWrite)
+    {
+      _buffer.Write(bytes, offset, countToWrite);
     }
 
     public async Task WriteAsync(byte[] bytesToWrite, bool execAsync)
@@ -283,6 +293,21 @@ namespace MySql.Data.MySqlClient
       await WriteAsync(_tempBuffer, 0, numbytes, execAsync).ConfigureAwait(false);
     }
 
+    public void WriteInteger(long v, int numbytes)
+    {
+      long val = v;
+
+      Debug.Assert(numbytes > 0 && numbytes < 9);
+
+      for (int x = 0; x < numbytes; x++)
+      {
+        _tempBuffer[x] = (byte)(val & 0xff);
+        val >>= 8;
+      }
+
+      Write(_tempBuffer, 0, numbytes);
+    }
+
     public int ReadPackedInteger()
     {
       byte c = ReadByte();
@@ -294,6 +319,27 @@ namespace MySql.Data.MySqlClient
         case 253: return ReadInteger(3);
         case 254: return ReadInteger(4);
         default: return c;
+      }
+    }
+
+    public void WriteLength(long length)
+    {
+      if (length < 251)
+        WriteByte((byte)length);
+      else if (length < 65536L)
+      {
+        WriteByte(252);
+        WriteInteger(length, 2);
+      }
+      else if (length < 16777216L)
+      {
+        WriteByte(253);
+        WriteInteger(length, 3);
+      }
+      else
+      {
+        WriteByte(254);
+        WriteInteger(length, 8);
       }
     }
 

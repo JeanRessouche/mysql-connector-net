@@ -1,16 +1,16 @@
-// Copyright (c) 2004, 2023, Oracle and/or its affiliates.
+// Copyright © 2004, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -28,6 +28,9 @@
 
 using MySql.Data.common;
 using MySql.Data.MySqlClient;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Pkcs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,6 +41,8 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Utilities.IO.Pem;
 
 namespace MySql.Data.Common
 {
@@ -61,7 +66,7 @@ namespace MySql.Data.Common
     /// <summary>
     /// Defines the supported TLS protocols.
     /// </summary>
-    private static SslProtocols[] tlsProtocols = new SslProtocols[] { SslProtocols.Tls12 };
+    private static SslProtocols[] tlsProtocols = new SslProtocols[] { SslProtocols.Tls12};
     private static Dictionary<string, SslProtocols> tlsConnectionRef = new Dictionary<string, SslProtocols>();
     private static Dictionary<string, int> tlsRetry = new Dictionary<string, int>();
     private static Object thisLock = new Object();
@@ -97,6 +102,17 @@ namespace MySql.Data.Common
     }
 
     /// <summary>
+    /// Retrieves a certificate from PEM file.
+    /// </summary>
+    private X509Certificate2 GetCertificateFromPEM(string certificatePath, string certificatePassword)
+    {
+      var certParser = new Org.BouncyCastle.X509.X509CertificateParser();
+      var cert = certParser.ReadCertificate(File.ReadAllBytes(certificatePath));
+      return new X509Certificate2(cert.GetEncoded(), certificatePassword);
+    }
+
+
+    /// <summary>
     /// Retrieves a collection containing the client SSL PFX certificates.
     /// </summary>
     /// <remarks>Dependent on connection string settings.
@@ -108,10 +124,18 @@ namespace MySql.Data.Common
       // Check for file-based certificate
       if (_settings.CertificateFile != null)
       {
-        X509Certificate2 clientCert = new X509Certificate2(_settings.CertificateFile,
+        if (_treatCertificatesAsPemFormat)
+        {
+          certs.Add(GetCertificateFromPEM(_settings.CertificateFile, _settings.CertificatePassword));
+          return certs;
+        }
+        else
+        {
+          X509Certificate2 clientCert = new X509Certificate2(_settings.CertificateFile,
             _settings.CertificatePassword);
-        certs.Add(clientCert);
-        return certs;
+          certs.Add(clientCert);
+          return certs;
+        }
       }
 
       if (_settings.CertificateStoreLocation == MySqlCertificateStoreLocation.None)
@@ -190,15 +214,14 @@ namespace MySql.Data.Common
 
       if (_settings.TlsVersion != null)
       {
-#if NET452 || NETSTANDARD2_0
-        if (_settings.TlsVersion.Equals("Tls13", StringComparison.OrdinalIgnoreCase))
-          throw new NotSupportedException(Resources.Tlsv13NotSupported);
-#endif
-
         SslProtocols sslProtocolsToUse = (SslProtocols)Enum.Parse(typeof(SslProtocols), _settings.TlsVersion);
         List<SslProtocols> listProtocols = new List<SslProtocols>();
 
-#if NET48 || NETSTANDARD2_1 || NET5_0_OR_GREATER
+#if NET5_0_OR_GREATER
+        if (sslProtocolsToUse.HasFlag(SslProtocols.Tls13))
+          listProtocols.Add(SslProtocols.Tls13);
+#else
+        // 12288 represents the numerical value of SslProtocols.Tls13 enum option.
         if (sslProtocolsToUse.HasFlag((SslProtocols)12288))
           listProtocols.Add((SslProtocols)12288);
 #endif
@@ -217,7 +240,10 @@ namespace MySql.Data.Common
       {
         if (!tlsRetry.ContainsKey(connectionId))
         {
-          tlsRetry[connectionId] = 0;
+          lock (tlsRetry)
+          {
+            tlsRetry[connectionId] = 0;
+          }
         }
         for (int i = tlsRetry[connectionId]; i < tlsProtocols.Length; i++)
         {
@@ -239,7 +265,10 @@ namespace MySql.Data.Common
             sslStream.AuthenticateAsClientAsync(_settings.Server, certs, tlsProtocol, false).GetAwaiter().GetResult();
         }
 
-        tlsConnectionRef[connectionId] = tlsProtocol;
+        lock (tlsConnectionRef)
+        {
+          tlsConnectionRef[connectionId] = tlsProtocol;
+        }
         tlsRetry.Remove(connectionId);
       }
       catch (AggregateException ex)

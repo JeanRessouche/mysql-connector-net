@@ -1,16 +1,16 @@
-﻿// Copyright (c) 2022, 2023, Oracle and/or its affiliates.
+// Copyright © 2022, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -66,14 +66,14 @@ namespace MySql.Data.Authentication.FIDO
     #endregion
 
     #region Constructors
-    internal FidoAssertionStatement(fido_assert_t* native)
+    internal FidoAssertionStatement(fido_assert_t* native, int idx)
     {
-      var idx = IntPtr.Zero;
-      AuthDataLen = NativeMethods.fido_assert_authdata_len(native, idx);
-      AuthData = new ReadOnlySpan<byte>(NativeMethods.fido_assert_authdata_ptr(native, idx), AuthDataLen);
-      Id = new ReadOnlySpan<byte>(NativeMethods.fido_assert_id_ptr(native, idx), NativeMethods.fido_assert_id_len(native, idx));
-      SignatureLen = NativeMethods.fido_assert_sig_len(native, idx);
-      Signature = new ReadOnlySpan<byte>(NativeMethods.fido_assert_sig_ptr(native, idx), SignatureLen);
+      IntPtr index = new IntPtr(idx);
+      AuthDataLen = NativeMethods.fido_assert_authdata_len(native, index);
+      AuthData = new ReadOnlySpan<byte>(NativeMethods.fido_assert_authdata_ptr(native, index), AuthDataLen);
+      Id = new ReadOnlySpan<byte>(NativeMethods.fido_assert_id_ptr(native, index), NativeMethods.fido_assert_id_len(native, index));
+      SignatureLen = NativeMethods.fido_assert_sig_len(native, index);
+      Signature = new ReadOnlySpan<byte>(NativeMethods.fido_assert_sig_ptr(native, index), SignatureLen);
     }
     #endregion
   }
@@ -160,13 +160,23 @@ namespace MySql.Data.Authentication.FIDO
     }
 
     /// <summary>
-    /// Gets the assertion statement. Since we're getting only one assertion, the index will always be zero.
+    /// Gets the assertion statement at the index provided.
     /// </summary>
+    /// <param name="idx">The index of the assertion statement to retrieve</param>
     /// <returns>The assertion statement object</returns>
     /// <exception cref="IndexOutOfRangeException">The index is not in the range [0, count)</exception>
-    public FidoAssertionStatement GetFidoAssertionStatement()
+    public FidoAssertionStatement GetFidoAssertionStatement(int idx=0)
     {
-      return new FidoAssertionStatement(_assert);
+      return new FidoAssertionStatement(_assert, idx);
+    }
+
+    /// <summary>
+    /// Gets the number of assertions contained in the authentication device.
+    /// </summary>
+    /// <returns>The number of assertions contained in the authentication device.</returns>
+    public int GetAssertCount()
+    {
+      return NativeMethods.fido_assert_count(_assert);
     }
 
     private void ReleaseUnmanagedResources()

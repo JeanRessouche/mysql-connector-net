@@ -1,16 +1,16 @@
-﻿// Copyright (c) 2013, 2022, Oracle and/or its affiliates.
+// Copyright © 2013, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -31,6 +31,7 @@ using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -95,6 +96,76 @@ namespace MySql.Data.MySqlClient.Tests
         string dbName = CreateDatabase("db1");
         c.ChangeDatabase(dbName);
         Assert.AreEqual(dbName, c.Database);
+      }
+    }
+
+    /// <summary>
+    /// Bug#35731216 Pool exhaustion after timeouts in transactions.
+    /// </summary>
+    [Test]
+    public void ConnectionPoolExhaustion()
+    {
+      for (var i = 0; i <= 11; i++)
+      {
+        var ex = Assert.Catch<MySqlException>(() => CreateCommandTimeoutException());
+        //Prior to the fix the exception thrown was 'error connecting: Timeout expired.  The timeout period elapsed prior to obtaining a connection from the pool.  This may have occurred because all pooled connections were in use and max pool size was reached.' after the 10th execution.
+        Assert.AreEqual("Fatal error encountered during command execution.", ex.Message);
+      }
+    }
+
+    private void CreateCommandTimeoutException()
+    {
+      MySqlConnectionStringBuilder settings = new MySqlConnectionStringBuilder(Connection.ConnectionString);
+      settings.Pooling = true;
+      settings.MaximumPoolSize = 10;
+      using (var conn = new MySqlConnection(settings.GetConnectionString(true)))
+      {
+        conn.Open();
+        using (var tran = conn.BeginTransaction())
+        {
+          using (var cmd = conn.CreateCommand())
+          {
+            cmd.CommandText = "DO SLEEP(5);";
+            cmd.CommandTimeout = 1;
+            cmd.ExecuteNonQuery();
+          }
+        }
+      }
+    }
+
+    /// <summary>
+    /// Bug#36319784 Minpoolsize different than 0 causes connector to hang after first connection
+    /// </summary>
+    [Test]
+    public void PoolingMultipleConnections()
+    {
+      Connection.Settings.Pooling = true;
+      Connection.Settings.MaximumPoolSize = 100;
+      Connection.Settings.MinimumPoolSize = 1;
+      MySqlConnection conn =new MySqlConnection(Connection.ConnectionString);
+      Assert.DoesNotThrow(() => conn.Open());
+
+      Connection.Settings.PersistSecurityInfo = false;
+      conn = conn = new MySqlConnection(Connection.ConnectionString);
+      Assert.Throws<MySqlException>(() => conn.Open());
+
+      Connection.Settings.PersistSecurityInfo = true;
+      conn = conn = new MySqlConnection(Connection.ConnectionString );
+      Assert.DoesNotThrow(() => conn.Open());
+    }
+
+    /// <summary>
+    /// Bug#35827809 Connector/Net allows a connection that has been disposed to be reopened.
+    /// </summary>
+    [Test]
+    public void ReOpenDisposedConnection()
+    {
+      using (MySqlConnection c = new MySqlConnection(Connection.ConnectionString))
+      {
+        c.Open();
+        c.Close();
+        c.Dispose();
+        Assert.Throws<InvalidOperationException>(() => c.Open());
       }
     }
 
@@ -783,6 +854,8 @@ namespace MySql.Data.MySqlClient.Tests
     [Ignore("To be able to connect using Named Pipes, it requires to start the server supporting the protocol")]
     public void ConnectUsingNamedPipes()
     {
+      if (!Platform.IsWindows()) Assert.Ignore("Shared Memory is only supported on Windows.");
+
       var sb = new MySqlConnectionStringBuilder()
       {
         Server = Host,
@@ -796,6 +869,54 @@ namespace MySql.Data.MySqlClient.Tests
       using var conn = new MySqlConnection(sb.ConnectionString);
       var ex = Assert.Throws<MySqlException>(() => conn.Open());
       StringAssert.AreEqualIgnoringCase(string.Format(Resources.SslNotAllowedForConnectionProtocol, sb.ConnectionProtocol), ex.Message);
+    }
+
+    /// <summary>
+    /// Bug#36208929 - Named pipe connection doesn't work in multithread environment
+    /// To be able to connect using Named Pipes, it requires to start the server supporting the protocol
+    /// mysqld --standalone --console --named-pipe=on
+    /// </summary>
+    [Test]
+    [Ignore("To be able to connect using Named Pipes, it requires to start the server supporting the protocol")]
+    public void NamedPipesMultithreadConnection()
+    {
+      if (!Platform.IsWindows()) Assert.Ignore("Named Pipes is only supported on Windows.");
+
+      var sb = new MySqlConnectionStringBuilder()
+      {
+        Server = Host,
+        UserID = RootUser,
+        ConnectionProtocol = MySqlConnectionProtocol.NamedPipe,
+      };
+
+      List<Thread> threads = new List<Thread>();
+      for (int i = 0; i < 2; i++)
+      {
+        threads.Add(new Thread(() =>
+        {
+          MySqlConnection connection = new MySqlConnection(sb.ConnectionString);
+
+          Assert.DoesNotThrow(() => connection.Open());
+
+          for (int i = 0; i < 200; i++)
+          {
+            MySqlCommand cmd = connection.CreateCommand();
+            cmd.CommandText = "Select CURRENT_USER();";
+            cmd.CommandType = CommandType.Text;
+            Assert.DoesNotThrow(() => cmd.ExecuteNonQuery());
+          }
+        }));
+      }
+
+      foreach (Thread thread in threads)
+      {
+        thread.Start();
+      }
+
+      foreach (Thread thread in threads)
+      {
+        thread.Join();
+      }
     }
 
     /// <summary>
@@ -828,6 +949,54 @@ namespace MySql.Data.MySqlClient.Tests
       {
         var ex = Assert.Throws<MySqlException>(() => conn.Open());
         StringAssert.AreEqualIgnoringCase(string.Format(Resources.SslNotAllowedForConnectionProtocol, sb.ConnectionProtocol), ex.Message);
+      }
+    }
+
+    /// <summary>
+    /// Bug#36208932 - Shared memory connection doesn't work in multithread environment
+    /// To be able to connect using Shared Memory, it requires to start the server supporting the protocol
+    /// mysqld --standalone --console --shared-memory=on
+    /// </summary>
+    [Test]
+    [Ignore("To be able to connect using Shared Memory, it requires to start the server supporting the protocol")]
+    public void SharedMemoryMultithreadConnection()
+    {
+      if (!Platform.IsWindows()) Assert.Ignore("Shared Memory is only supported on Windows.");
+
+      var sb = new MySqlConnectionStringBuilder()
+      {
+        Server = Host,
+        UserID = RootUser,
+        ConnectionProtocol = MySqlConnectionProtocol.SharedMemory,
+      };
+
+      List<Thread> threads = new List<Thread>();
+      for (int i = 0; i < 2; i++)
+      {
+        threads.Add(new Thread(() =>
+        {
+          MySqlConnection connection = new MySqlConnection(sb.ConnectionString);
+
+          Assert.DoesNotThrow(() => connection.Open());
+
+          for (int i = 0; i < 200; i++)
+          {
+            MySqlCommand cmd = connection.CreateCommand();
+            cmd.CommandText = "Select CURRENT_USER();";
+            cmd.CommandType = CommandType.Text;
+            Assert.DoesNotThrow(() => cmd.ExecuteNonQuery());
+          }
+        }));
+      }
+
+      foreach (Thread thread in threads)
+      {
+        thread.Start();
+      }
+
+      foreach (Thread thread in threads)
+      {
+        thread.Join();
       }
     }
 
@@ -1476,9 +1645,79 @@ namespace MySql.Data.MySqlClient.Tests
       Assert.ThrowsAsync<OperationCanceledException>(async () => await conn.OpenAsync(cts.Token));
     }
 
-    #region Methods
 
-    private void ExecuteQueriesSuccess(string sql, string password)
+    /// <summary>
+    /// Bug # 35307501 [Opening two MySqlConnections simultaneously can crash]
+    /// </summary>
+    [Test]
+    public void OpenMultipleConnectionsOnMultipleThreads()
+    {
+        var tasks = new List<Task>();
+        for (int i = 0; i < 5; i++)
+        {
+            tasks.Add(Task.Run(() =>
+            {
+                using (var connection = new MySqlConnection(Connection.ConnectionString))
+                {
+                    connection.Open();
+                }
+            }));
+        }
+        Task.WaitAll(tasks.ToArray());
+    }
+
+    #if NET462 || NET48
+    /// <summary>
+    /// Deadlock bug on application with Synchronization context (Net full framework Asp.NET app, Windows Forms App, WPF app.
+    /// Any App with - WindowsFormsSynchronizationContext, DispatcherSynchronizationContext and AspNetSynchronizationContext
+    /// will deadlock if missing ConfigureAwait(false) inside the MySql library.
+    /// </summary>
+    //[Test]
+    //public void OpenMultipleConnectionsOnMultipleThreadsInAppWithSynchronizationContext()
+    //{ 
+    //  var sb = new MySqlConnectionStringBuilder(Connection.ConnectionString);
+    //  sb.Pooling = true;
+
+    //  var tasks = new List<Task>();
+    //  for (int i = 0; i < 5; i++)
+    //  {
+    //     tasks.Add(Task.Run(() =>
+    //     {
+    //       SynchronizationContext.SetSynchronizationContext(new System.Windows.Forms.WindowsFormsSynchronizationContext());
+    //       using (var connection = new MySqlConnection(sb.ConnectionString))
+    //       {
+    //         connection.Open();
+    //       }
+    //     }));
+    //  }
+    //  Assert.IsTrue(Task.WaitAll(tasks.ToArray(),5000),"Deadlock when connecting - cancelled waiting after 5 seconds.");
+    //}
+
+    //[Test]
+    //public void OpenAsyncMultipleConnectionsOnMultipleThreadsInAppWithSynchronizationContext()
+    //{
+    //  var sb = new MySqlConnectionStringBuilder(Connection.ConnectionString);
+    //  sb.Pooling = true;
+
+    //  var tasks = new List<Task>();
+    //  for (int i = 0; i < 5; i++)
+    //  {
+    //    tasks.Add(Task.Run(() =>
+    //    {
+    //      SynchronizationContext.SetSynchronizationContext(new System.Windows.Forms.WindowsFormsSynchronizationContext());
+    //      using (var connection = new MySqlConnection(sb.ConnectionString))
+    //      {
+    //        connection.OpenAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+    //      }
+    //    }));
+    //  }
+    //  Assert.IsTrue(Task.WaitAll(tasks.ToArray(),5000),"Deadlock when connecting - cancelled waiting after 5 seconds.");
+    //}
+    #endif
+
+            #region Methods
+
+            private void ExecuteQueriesSuccess(string sql, string password)
     {
       if (Version < new Version(8, 0, 17)) return;
       var sb = new MySqlConnectionStringBuilder(Connection.ConnectionString);

@@ -1,16 +1,16 @@
-﻿// Copyright (c) 2013, 2022, Oracle and/or its affiliates.
+// Copyright © 2013, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -459,8 +459,6 @@ namespace MySql.Data.MySqlClient.Tests
         Assert.AreEqual('o', (char)buffer[1]);
         Assert.AreEqual(2, read);
 
-        string s = reader.GetString(0);
-        Assert.AreEqual("something", s);
       }
     }
 
@@ -777,12 +775,10 @@ namespace MySql.Data.MySqlClient.Tests
         "SELECT ST_SRID(v) FROM Test" :
         "SELECT SRID(v) FROM Test";
 
-      using (MySqlDataReader reader = cmd.ExecuteReader())
-      {
-        reader.Read();
-        var val = reader.GetString(0);
-        Assert.AreEqual("101", val);
-      }
+      using var reader = cmd.ExecuteReader();
+      reader.Read();
+      var val = reader.GetInt32(0);
+      Assert.AreEqual(101, val);
     }
 
     [Test]
@@ -1663,5 +1659,133 @@ namespace MySql.Data.MySqlClient.Tests
       Assert.AreEqual(treatAsBool ? 1 : -2, reader.GetFieldValue<int>(0));
       Assert.AreEqual(treatAsBool ? 1 : -2, reader.GetFieldValue<long>(0));
     }
+
+    [Test]
+    public void OldGetStringBehaviorOff()
+    {
+      ExecuteSQL(@"CREATE TABLE Test (value1 int, value2 DATETIME); INSERT INTO Test VALUES (1, '2023-10-30');");
+
+      using var cmd = new MySqlCommand();
+      cmd.Connection = Connection;
+      cmd.CommandText = "SELECT * FROM Test";
+      using var reader = cmd.ExecuteReader();
+      reader.Read();
+      Assert.Throws<InvalidCastException>(() => reader.GetString(0));
+      Assert.Throws<InvalidCastException>(() => reader.GetString(1));
+   }
+
+    [Test]
+    public void OldGetStringBehaviorOn()
+    {
+      ExecuteSQL(@"CREATE TABLE Test (value1 int, value2 DECIMAL(10,2)); INSERT INTO Test VALUES (1, 20.4);");
+      
+      string connString = Connection.ConnectionString + $";oldgetstringbehavior=true;";
+      using var conn = new MySqlConnection(connString);
+      conn.Open();
+
+      using var cmd = new MySqlCommand();
+      cmd.Connection = conn;
+      cmd.CommandText = "SELECT * FROM Test";
+      using var reader = cmd.ExecuteReader();
+      reader.Read();
+      Assert.AreEqual("1", reader.GetString(0));
+      Assert.AreEqual("20.40", reader.GetString(1));
+   }
+
+    [Test]
+    public void BadVectorDataThrowsException()
+    {
+      if (Version < new Version(9, 0, 0))
+        Assert.Ignore();
+
+      ExecuteSQL(@"CREATE TABLE Test (vector1 VECTOR)");
+      using var cmd = new MySqlCommand();
+      cmd.Connection = Connection;
+
+      // insert a value
+      cmd.CommandText = "INSERT INTO Test VALUES(@v1)";
+      cmd.Parameters.Add("v1", MySqlDbType.Vector);
+      cmd.Parameters[0].Value = "not a vector value";
+      Assert.Throws<MySqlException>(() => cmd.ExecuteNonQuery());
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void InsertAndSelectVector(bool prepared)
+    {
+      if (Version < new Version(9, 0, 0))
+        Assert.Ignore();
+
+      ExecuteSQL(@"CREATE TABLE Test (vector1 VECTOR)");
+      using var cmd = new MySqlCommand();
+      cmd.Connection = Connection;
+
+      // insert a value
+      cmd.CommandText = "INSERT INTO Test VALUES(@v1)";
+      cmd.Parameters.Add("v1", MySqlDbType.Vector);
+      float[] floatArray = [1.2f, 2.3f, 3.4f];
+
+      // copy floats into byteArray
+      byte[] byteArray = new byte[floatArray.Length * 4];
+      Buffer.BlockCopy(floatArray, 0, byteArray, 0, byteArray.Length);
+
+      cmd.Parameters[0].Value = byteArray;
+      if (prepared) cmd.Prepare();
+      cmd.ExecuteNonQuery();
+
+      // now select that value back out and compare
+      cmd.CommandText = "SELECT vector1 from Test";
+      if (prepared) cmd.Prepare();
+      using var reader = cmd.ExecuteReader();
+      reader.Read();
+      var value = reader.GetValue(0);
+      Assert.IsInstanceOf(typeof(byte[]), value);
+      byteArray = (byte[])value;
+
+      float[] floatArray2 = new float[byteArray.Length / 4];
+      Buffer.BlockCopy(byteArray, 0, floatArray2, 0, byteArray.Length);
+
+      Assert.AreEqual(3, floatArray2.Length);
+      Assert.AreEqual(1.2f, floatArray2[0]);
+      Assert.AreEqual(2.3f, floatArray2[1]);
+      Assert.AreEqual(3.4f, floatArray2[2]);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void VectorReturnedFromSproc(bool prepared)
+    {
+      if (Version < new Version(9, 0, 0))
+        Assert.Ignore();
+
+      ExecuteSQL("DROP PROCEDURE IF EXISTS spTest");
+      ExecuteSQL(@"CREATE PROCEDURE spTest (OUT v1 VECTOR) BEGIN 
+        SELECT STRING_TO_VECTOR('[1.2, 2.3, 3.4]') INTO v1; END");
+      using var cmd = new MySqlCommand();
+      cmd.Connection = Connection;
+
+      // prepare and execute the command
+      cmd.CommandText = "spTest";
+      cmd.Parameters.Add("v1", MySqlDbType.Vector);
+      cmd.Parameters[0].Direction = ParameterDirection.Output;
+      cmd.CommandType = CommandType.StoredProcedure;
+      if (prepared) cmd.Prepare();
+      cmd.ExecuteNonQuery();
+
+      // now the parameter should contain the output value
+      Assert.IsInstanceOf(typeof(byte[]), cmd.Parameters[0].Value);
+      byte[] byteArray = (byte[])cmd.Parameters[0].Value;
+
+      // now check to see if it has the correct values
+      float[] floatArray = new float[byteArray.Length / 4];
+      Buffer.BlockCopy(byteArray, 0, floatArray, 0, byteArray.Length);
+
+      Assert.AreEqual(3, floatArray.Length);
+      Assert.AreEqual(1.2f, floatArray[0]);
+      Assert.AreEqual(2.3f, floatArray[1]);
+      Assert.AreEqual(3.4f, floatArray[2]);
+    }
   }
+
+
 }

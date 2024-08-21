@@ -16,6 +16,12 @@ From MySQL Connector/NET 8.0, the driver also contains an implementation of [MyS
 
 From MySQL Connector/NET 8.1, the driver contains an implementation of [OpenTelemetry](https://dev.mysql.com/doc/connector-net/en/connector-net-programming-telemetry.html) which requires the use of the [MySql.Data.OpenTelemetry](https://www.nuget.org/profiles/MySQL/) Nuget package to enable the generation of telemetry data.
 
+From MySQL Connector/NET 8.2, the driver adds support for [WebAuthn authentication](https://dev.mysql.com/doc/dev/connector-net/latest/api/data_api/MySql.Data.MySqlClient.WebAuthnActionCallback.html), the driver also adds support for [.NET 8](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-8).
+
+From MySQL Connector/NET 8.3, the driver also adds support for [.NET 8](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-8) and [EFCore 8](https://learn.microsoft.com/en-us/ef/core/what-is-new/ef-core-8.0/whatsnew) GA versions.
+
+From MySQL Connector/NET 8.4, the driver adds support for TLS1.3 and removes support for FIDO authentication plugin.
+
 For detailed information please visit the official [MySQL Connector/NET documentation.](https://dev.mysql.com/doc/connector-net/en/)
 
 ## Licensing

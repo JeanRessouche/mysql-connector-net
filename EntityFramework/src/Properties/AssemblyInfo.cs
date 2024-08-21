@@ -1,16 +1,16 @@
-﻿// Copyright © 2008, 2019, Oracle and/or its affiliates. All rights reserved.
+// Copyright © 2008, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -30,19 +30,21 @@ using System.Security;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System;
 
-// General Information about an assembly is controlled through the following 
+// General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("MySql.Data.EntityFramework for EF6")]
-[assembly: AssemblyDescription("Entity Framework 6.0 supported")]
-
+[assembly: AssemblyTitle("MySql.Data.EntityFramework")]
+[assembly: AssemblyDescription("MySql.Data.EntityFramework adds support for cross-platform application deployment with the Entity Framework 6.4 version.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Oracle")]
-[assembly: AssemblyProduct("MySql.Data.EntityFramework")]
-[assembly: AssemblyCopyright("Copyright © 2008, 2019, Oracle and/or its affiliates. All rights reserved.")]
-[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCompany("Oracle Corporation")]
+[assembly: AssemblyProduct("MySQL Connector/NET")]
+[assembly: AssemblyCopyright("Copyright © 2008, 2024, Oracle and/or its affiliates.")]
+[assembly: AssemblyTrademark("Oracle®, Java, MySQL, and NetSuite are registered trademarks of Oracle and/or its affiliates.")]
 [assembly: AssemblyCulture("")]
+[assembly: SecurityRules(SecurityRuleSet.Level1)]
+[assembly: CLSCompliant(false)]
 
 // Setting ComVisible to false makes the types in this assembly not visible 
 // to COM components.  If you need to access a type in this assembly from 

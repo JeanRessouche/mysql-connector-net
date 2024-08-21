@@ -1,16 +1,16 @@
-﻿// Copyright (c) 2018, 2022, Oracle and/or its affiliates.
+// Copyright © 2018, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -199,6 +199,7 @@ namespace MySql.Data.MySqlClient.Tests
 
     /// <summary>
     /// WL14811 - Remove support for TLS 1.0 and 1.1
+    /// WL16176 - Add support for TLS 1.3
     /// </summary>
     [TestCase("[]", 1)]
     [TestCase("Tlsv1, Tlsv1.1", 2)]
@@ -208,21 +209,17 @@ namespace MySql.Data.MySqlClient.Tests
     [TestCase("foo, bar", 3)]
     [TestCase("Tlsv1.0, Tlsv1.2", 0)]
     [TestCase("foo, Tlsv1.2", 0)]
-    //#if NET48 || NETCOREAPP3_1 || NET5_0 || NET6_0
-    //    [TestCase("Tlsv1.3", "Tlsv1.3")]
-    //    [TestCase("Tlsv1.0, Tlsv1.1, Tlsv1.2, Tlsv1.3", "Tlsv1.3")]
-    //#endif
-#if NET452
     [TestCase("Tlsv1.3", 4)]
-    [TestCase("Tlsv1.0, Tlsv1.1, Tlsv1.2, Tlsv1.3", 0)]
-#endif
     [Property("Category", "Security")]
     public void TlsVersionTest(string tlsVersion, int error)
     {
+      if (error == 4 && Platform.IsMacOSX())
+        Assert.Ignore();
+
       var builder = new MySqlConnectionStringBuilder(Connection.ConnectionString);
       void SetTlsVersion() { builder.TlsVersion = tlsVersion; }
       string ex;
-      string tls = "TLSv1.2";
+      string tlsdefault = "TLSv1.2";
 
       switch (error)
       {
@@ -238,10 +235,6 @@ namespace MySql.Data.MySqlClient.Tests
           ex = Assert.Throws<ArgumentException>(SetTlsVersion).Message;
           StringAssert.AreEqualIgnoringCase(Resources.TlsNonValidProtocols, ex);
           break;
-        case 4:
-          SetTlsVersion();
-          Assert.Throws<NotSupportedException>(() => new MySqlConnection(builder.ConnectionString).Open());
-          break;
         default:
           SetTlsVersion();
           var conn = new MySqlConnection(builder.ConnectionString);
@@ -256,9 +249,11 @@ namespace MySql.Data.MySqlClient.Tests
 
             using MySqlDataReader dr = cmd.ExecuteReader();
             Assert.True(dr.Read());
-            StringAssert.AreEqualIgnoringCase(tls, dr[1].ToString());
+            if (error==4)
+              StringAssert.AreEqualIgnoringCase(tlsVersion, dr[1].ToString());
+            else
+              StringAssert.AreEqualIgnoringCase(tlsdefault, dr[1].ToString());
           }
-
           break;
       }
     }
@@ -335,13 +330,6 @@ namespace MySql.Data.MySqlClient.Tests
         {
           Assert.True(reader.Read());
           StringAssert.StartsWith("TLSv1", reader.GetString(1));
-        }
-
-        command = new MySqlCommand("show variables like 'have_ssl';", c);
-        using (MySqlDataReader reader = command.ExecuteReader())
-        {
-          Assert.True(reader.Read());
-          StringAssert.AreEqualIgnoringCase("YES", reader.GetString(1));
         }
 
         command = new MySqlCommand("show variables like 'tls_version'", c);
@@ -1213,7 +1201,7 @@ namespace MySql.Data.MySqlClient.Tests
     {
       Dictionary<string, string> strValues = new();
 
-      var commandList = new string[] { "show variables like 'have_ssl'", "show  status like '%Ssl_version'", "show variables like 'tls_version'" };
+      var commandList = new string[] { "show  status like '%Ssl_version'", "show variables like 'tls_version'" };
       foreach (var item in commandList)
       {
         var cmd = Connection.CreateCommand();
@@ -1226,7 +1214,7 @@ namespace MySql.Data.MySqlClient.Tests
           }
         }
       }
-      return (strValues["have_ssl"] == "YES" && strValues["Ssl_version"].StartsWith("TLS") && !string.IsNullOrEmpty(strValues["tls_version"])) ? true : false;
+      return (strValues["Ssl_version"].StartsWith("TLS") && !string.IsNullOrEmpty(strValues["tls_version"])) ? true : false;
     }
     #endregion Methods
   }

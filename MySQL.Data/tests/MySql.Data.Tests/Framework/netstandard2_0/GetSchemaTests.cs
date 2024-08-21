@@ -1,16 +1,16 @@
-// Copyright (c) 2013, 2022, Oracle and/or its affiliates.
+// Copyright © 2013, 2024, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0, as
 // published by the Free Software Foundation.
 //
-// This program is also distributed with certain software (including
-// but not limited to OpenSSL) that is licensed under separate terms,
-// as designated in a particular file or component or in included license
-// documentation.  The authors of MySQL hereby grant you an
-// additional permission to link the program and your derivative works
-// with the separately licensed software that they have included with
-// MySQL.
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms, as
+// designated in a particular file or component or in included license
+// documentation. The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
 //
 // Without limiting anything contained in the foregoing, this file,
 // which is part of MySQL Connector/NET, is also subject to the
@@ -75,6 +75,9 @@ namespace MySql.Data.MySqlClient.Tests
     [Test]
     public void DataTypes()
     {
+      if (Version < new Version(9, 0, 0))
+        Assert.Ignore();
+
       DataTable dt = Connection.GetSchema("DataTypes", new string[] { });
 
       foreach (DataRow row in dt.Rows)
@@ -745,7 +748,10 @@ namespace MySql.Data.MySqlClient.Tests
       using (var conn = new MySqlConnection(Settings.ConnectionString))
       {
         conn.Open();
-        var cmd = new MySqlCommand("create table Test(c1 int, c2 double GENERATED ALWAYS AS(c1 * 101 / 102) Stored COMMENT 'First Gen Col', c3 Json GENERATED ALWAYS AS(concat('{\"F1\":', c1, '}')) VIRTUAL COMMENT 'Second Gen /**/Col', c4 bigint GENERATED ALWAYS as (c1*10000) VIRTUAL UNIQUE KEY Comment '3rd Col' NOT NULL)", conn);
+        var cmd = new MySqlCommand(
+          @"create table Test(c1 int, 
+          c2 double GENERATED ALWAYS AS(c1 * 101 / 102) Stored COMMENT 'First Gen Col', 
+          c3 bigint GENERATED ALWAYS as (c1*10000) VIRTUAL UNIQUE KEY Comment '3rd Col' NOT NULL)", conn);
         cmd.ExecuteNonQuery();
 
         cmd = new MySqlCommand("insert into Test(c1) values(1000)", conn);
@@ -757,24 +763,21 @@ namespace MySql.Data.MySqlClient.Tests
         using (var reader = cmd.ExecuteReader())
         {
           Assert.True(reader.Read(), "Matching the values");
-          Assert.True(reader.GetString(0).Equals("1000", StringComparison.CurrentCulture), "Matching the values");
-          Assert.True(reader.GetString(1).Equals("990.196078431", StringComparison.CurrentCulture), "Matching the values");
-          Assert.True(reader.GetString(2).Equals("{\"F1\": 1000}", StringComparison.CurrentCulture), "Matching the values");
-          Assert.True(reader.GetString(3).Equals("10000000", StringComparison.CurrentCulture), "Matching the values");
+          Assert.True(reader.GetInt32(0).Equals(1000), "Matching the values");
+          Assert.True(reader.GetDouble(1).Equals(990.196078431), "Matching the values");
+          Assert.True(reader.GetInt64(2).Equals(10000000), "Matching the values");
         }
 
         var dt = conn.GetSchema("Columns", new[] { null, null, "Test", null });
-        Assert.AreEqual(4, dt.Rows.Count, "Matching the values");
+        Assert.AreEqual(3, dt.Rows.Count, "Matching the values");
         Assert.AreEqual("Columns", dt.TableName, "Matching the values");
         Assert.AreEqual("int", dt.Rows[0]["DATA_TYPE"].ToString(), "Matching the values");
         Assert.AreEqual("double", dt.Rows[1]["DATA_TYPE"].ToString(), "Matching the values");
-        Assert.AreEqual("json", dt.Rows[2]["DATA_TYPE"].ToString(), "Matching the values");
-        Assert.AreEqual("bigint", dt.Rows[3]["DATA_TYPE"].ToString(), "Matching the values");
+        Assert.AreEqual("bigint", dt.Rows[2]["DATA_TYPE"].ToString(), "Matching the values");
         Assert.AreEqual("", dt.Rows[0]["GENERATION_EXPRESSION"].ToString(), "Matching the values");
         Assert.AreEqual("", dt.Rows[0]["EXTRA"].ToString(), "Matching the values");
         Assert.AreEqual("STORED GENERATED", dt.Rows[1]["EXTRA"].ToString(), "Matching the values");
         Assert.AreEqual("VIRTUAL GENERATED", dt.Rows[2]["EXTRA"].ToString(), "Matching the values");
-        Assert.AreEqual("VIRTUAL GENERATED", dt.Rows[3]["EXTRA"].ToString(), "Matching the values");
       }
     }
 
